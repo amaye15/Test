@@ -1,0 +1,152 @@
+---
+title: "Italian Wine"
+author: "M1 Sciences Cognitives"
+date: "November 2020"
+output:
+  html_notebook:
+    number_sections: true
+    toc: yes
+---
+
+The goal is to use principal component analysis (PCA) on a dataset for which PCA yields nice (unsupervised) classification.
+You will first do PCA step by step (standard and normalized PCA), before using the built-in function from the MASS package.
+
+# Load data, organize and summarize
+```{r}
+require("MASS")
+```
+
+
+First load data from file and assign names to variables.
+```{r}
+wines <- read.csv("~/Documents/Doc Gorilla/wine.data.txt", header=FALSE) # Download dataset then 'import dataset'
+colnames(wines) <- c("Cvs","Alcohol","Malic acid","Ash","Alcalinity of ash","Magnesium","Total phenols", "Flavanoids", "Nonflavanoid phenols","Proanthocyanins", "Color intensity","Hue", "OD280/OD315 of diluted wines","Proline")
+wines.classes <- factor(wines$Cvs)
+wines <- wines[,-1]
+summary(wines)
+```
+The 4th code line transforms the first row to type "factor", which will be useful later. The next code line removes it from the data frame.The last code line summarizes the data frame.
+
+You can examine the varios variables created above from the Environment tab on the upper right panel of Rstudio.
+
+Next, also collect quantities that will be useful in the following
+```{r}
+tmp <- dim(wines)
+wines.nvars <- tmp[2]
+wines.ninds <- tmp[1]
+```
+Again, don't hesitate to examine variables in the environment tab
+
+# Compute basic statistics
+## Variable means
+To compute means of variables, use the function <i>colMeans</i> (if necessary, study the documentation)
+```{r}
+wines.means <- colMeans(wines)
+summary(wines.means)
+wines.bar <- matrix(rep(wines.means,wines.ninds),ncol=wines.nvars,byrow=T)
+```
+We can see that variables can take a wide range of values. What does <i>wines.bar</i> represent ?
+
+## Variable sample covariance matrix
+We use the function <i>cov</i> to estimate the covariance matrix, and <i>eigen</i> to diagonalize it (please study the documentation to understand the syntax). Eigenvalues can be visualized using the function <i>barplot</i> (or plot)
+```{r}
+wines.cov = cov(wines) # Covariance matrix 
+tmp <- eigen(wines.cov) # Dialogianlisation 
+V <- tmp$vectors # Vector
+D <- tmp$values # Vector
+barplot(D,xlab='Eigenvalue index',ylab='explained variance')
+```
+Obtained values don't say much, it's better to normalize by the total variance, to get the proportion of variance explained by a component.
+We can also visualize the cumulated proportion of variance explained by components, using the function <i>cumsum</i>
+
+```{r}
+barplot(D/sum(D),xlab='Eigenvalue index',ylab='Proportion of explained variance')
+barplot(cumsum(D)/sum(D),xlab='Eigenvalue index',ylab='Proportion of cumulated explained variance')
+print(paste('The first component explains',100*D[1]/sum(D),'% of variance'))
+```
+# Principal component analysis
+PCA is based upon the diagonalization of the covariance matrix, and yields a new basis of the space of individuals, with matrix $V$ (the matrix of eigenvectors of the covariance matrix).
+## Scores
+We can now project the individuals onto the corresponding basis vectors and compute scores. Since $V$ is the matrix of an orthonormal basis, scores are obtained as the columns of $X^cV$, $X^c$ being the centered data frame. We then need to center first 
+```{r}
+wines.centered <- as.matrix(wines - wines.bar) # as.matrix forces the variable to be considered as a maxtrix
+scores <- wines.centered %*% V # Please modify
+plot(scores[,1],scores[,2],col=wines.classes,xlab = 'PC 1', ylab = 'PC 2')
+```
+What do you see there ?
+
+## Loadings
+Loadings are projections of variables onto a new basis obtained from the basis $U$. Calculation shows that loadings are columns of the matrix $V\Lambda$, where the diagonal matrix $\Lambda$ is defined by $D=\Lambda^2$
+```{r}
+Lambda <- diag(sqrt(D))
+wines.loadings <- V %*% Lambda # please correct
+plot(wines.loadings[,1:2],xlab = 'PC 1', ylab = 'PC 2')
+plot(wines.loadings[,1:2],type='n',xlab = 'PC 1', ylab = 'PC 2')
+text(wines.loadings[,1:2],as.character(1:13))
+```
+How can you interpret this (variables 13 and 5 seem to carry a huge part of variability)? Anything special with these variables ?  Wouldn't this suggest to normalize data prior to PCA ?
+
+## PCA on normalized data
+It may be shown that normalized data can be obtained directly in matrix form using the diagonal matrix $S=diag(s_1,\dots s_n)$, as
+$$
+Z = X^c S^{-1}\ .
+$$
+$s_1,... s_n$ are the square roots of the diagonal elements of the covariance matrix of the data array.
+```{r}
+S <- diag(sqrt(diag(wines.cov))) # Where does this come from? Slide 16
+wines.reduced <- as.matrix(wines.centered) %*% solve(S)
+```
+Now you can just do as before:
+
+- Compute correlation matrix (covariance matrix of reduced data)
+
+- Diagonalize the correlation matrix
+
+- Examine corresponding variabilities; any comment ?
+
+- Compute scores and loadings. Any comment ?
+
+```{r}
+wines.cov = cov(wines.reduced) # Covariance matrix 
+tmp <- eigen(wines.cov) # Dialogianlisation 
+V <- tmp$vectors # Vector
+D <- tmp$values # Vector
+barplot(D,xlab='Eigenvalue index',ylab='explained variance')
+```
+```{r}
+barplot(D/sum(D),xlab='Eigenvalue index',ylab='Proportion of explained variance')
+barplot(cumsum(D)/sum(D),xlab='Eigenvalue index',ylab='Proportion of cumulated explained variance')
+print(paste('The first component explains',100*D[1]/sum(D),'% of variance'))
+```
+```{r}
+Lambda <- diag(sqrt(D))
+wines.loadings <- V %*% Lambda # please correct
+plot(wines.loadings[,1:2],xlab = 'PC 1', ylab = 'PC 2')
+plot(wines.loadings[,1:2],type='n',xlab = 'PC 1', ylab = 'PC 2')
+text(wines.loadings[,1:2],as.character(1:13))
+```
+```{r}
+wines.centered <- as.matrix(wines.reduced - wines.bar) # as.matrix forces the variable to be considered as a maxtrix
+scores <- wines.centered %*% V # Please modify
+plot(scores[,1],scores[,2],col=wines.classes,xlab = 'PC 1', ylab = 'PC 2')
+```
+# Using the princomp function
+The package <i>MASS</i> provides an implementation of principal component analysis. Please read the documentation and do standard and normalized PCA using princomp. In the standard case, start like this 
+and continue (plot scores and loadings). Then perform normalized PCA
+
+```{r}
+require('MASS')
+require('matlib')
+wines.pca <- princomp(wines, cor = T) # cor = T will use reduced data automatically
+#plot(wines.pca)
+
+#wines.reduced.pca <- princomp(wines.reduced)
+#plot(wines.reduced.pca)
+#biplot(wines.reduced.pca)
+
+
+plot(wines.pca$scores[,1],wines.pca$scores[,2], col=wines.classes,xlab = 'PC 1', ylab = 'PC 2')
+plot(wines.pca$center)
+plot(wines.pca$loadings[,1:2],xlab = 'PC 1', ylab = 'PC 2')
+```
+
